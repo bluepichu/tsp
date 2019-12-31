@@ -904,6 +904,17 @@ namespace ts {
                 type: "object"
             },
             description: Diagnostics.List_of_language_service_plugins
+        },
+        {
+            // A list of preprocessors
+            name: "preprocessors",
+            type: "list",
+            isTSConfigOnly:true,
+            element: {
+                name: "preprocessor",
+                type: "object"
+            },
+            description: Diagnostics.List_of_language_service_plugins // FIXME
         }
     ];
 
@@ -1601,7 +1612,6 @@ namespace ts {
         if (!sourceFile.statements.length) {
             return returnValue ? {} : undefined;
         }
-
         return convertPropertyValueToJson(sourceFile.statements[0].expression, knownRootOptions);
 
         function isRootOptionMap(knownOptions: Map<CommandLineOption> | undefined) {
@@ -2358,6 +2368,7 @@ namespace ts {
         const options = getDefaultCompilerOptions(configFileName);
         let typeAcquisition: TypeAcquisition | undefined, typingOptionstypeAcquisition: TypeAcquisition | undefined;
         let extendedConfigPath: string | undefined;
+
 
         const optionsIterator: JsonConversionNotifier = {
             onSetValidOptionKeyValueInParent(parentOption: string, option: CommandLineOption, value: CompilerOptionsValue) {

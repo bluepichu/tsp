@@ -19,6 +19,7 @@
         "scanner.ts",
         "utilities.ts",
         "parser.ts",
+        "preprocessor.ts",
         "commandLineParser.ts",
         "moduleNameResolver.ts",
 

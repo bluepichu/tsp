@@ -206,8 +206,10 @@ namespace ts {
          */
         function visitorWorker(node: Node): VisitResult<Node> {
             if (node.transformFlags & TransformFlags.ContainsTypeScript) {
+                console.log("Visiting typescript -- ", node.kind, node.transformFlags);
                 return visitTypeScript(node);
             }
+            console.log("No typescript -- ", node.kind, node.transformFlags);
             return node;
         }
 
@@ -355,6 +357,8 @@ namespace ts {
                 // See the implementation of `getLeadingComments` in comments.ts for more details.
                 return createNotEmittedStatement(node);
             }
+
+            console.log("visiting:", node.kind);
 
             switch (node.kind) {
                 case SyntaxKind.ExportKeyword:
@@ -507,6 +511,7 @@ namespace ts {
                 case SyntaxKind.TypeAssertionExpression:
                 case SyntaxKind.AsExpression:
                     // TypeScript type assertions are removed, but their subtrees are preserved.
+                    console.log("Hit type assertion", node);
                     return visitAssertionExpression(<AssertionExpression>node);
 
                 case SyntaxKind.CallExpression:
@@ -541,6 +546,10 @@ namespace ts {
                     // TypeScript namespace or external module import.
                     return visitImportEqualsDeclaration(<ImportEqualsDeclaration>node);
 
+                case SyntaxKind.PreprocessorExpression:
+                case SyntaxKind.PreprocessorStatement:
+                    console.log("Hit a preprocessor statement");
+                    // falls through
                 default:
                     // node contains some other TypeScript syntax
                     return visitEachChild(node, visitor, context);

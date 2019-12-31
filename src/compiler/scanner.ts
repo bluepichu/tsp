@@ -151,6 +151,7 @@ namespace ts {
         ")": SyntaxKind.CloseParenToken,
         "[": SyntaxKind.OpenBracketToken,
         "]": SyntaxKind.CloseBracketToken,
+        "#": SyntaxKind.HashToken,
         ".": SyntaxKind.DotToken,
         "...": SyntaxKind.DotDotDotToken,
         ";": SyntaxKind.SemicolonToken,
@@ -1870,6 +1871,12 @@ namespace ts {
                     case CharacterCodes.tilde:
                         pos++;
                         return token = SyntaxKind.TildeToken;
+                    case CharacterCodes.hash:
+                        if (text.charCodeAt(pos + 1) === CharacterCodes.hash) {
+                            return pos += 2, token = SyntaxKind.HashHashToken;
+                        }
+                        pos++;
+                        return token = SyntaxKind.HashToken;
                     case CharacterCodes.at:
                         pos++;
                         return token = SyntaxKind.AtToken;

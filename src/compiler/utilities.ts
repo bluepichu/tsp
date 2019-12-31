@@ -1669,6 +1669,7 @@ namespace ts {
             case SyntaxKind.TrueKeyword:
             case SyntaxKind.FalseKeyword:
             case SyntaxKind.RegularExpressionLiteral:
+            case SyntaxKind.PreprocessorExpression:
             case SyntaxKind.ArrayLiteralExpression:
             case SyntaxKind.ObjectLiteralExpression:
             case SyntaxKind.PropertyAccessExpression:
@@ -3090,6 +3091,7 @@ namespace ts {
             case SyntaxKind.NumericLiteral:
             case SyntaxKind.BigIntLiteral:
             case SyntaxKind.StringLiteral:
+            case SyntaxKind.PreprocessorExpression:
             case SyntaxKind.ArrayLiteralExpression:
             case SyntaxKind.ObjectLiteralExpression:
             case SyntaxKind.FunctionExpression:
@@ -5789,6 +5791,10 @@ namespace ts {
 
     // Expression
 
+    export function isPreprocessorExpression(node: Node): node is PreprocessorExpression {
+        return node.kind === SyntaxKind.PreprocessorExpression;
+    }
+
     export function isArrayLiteralExpression(node: Node): node is ArrayLiteralExpression {
         return node.kind === SyntaxKind.ArrayLiteralExpression;
     }
@@ -5927,6 +5933,10 @@ namespace ts {
     }
 
     // Block
+
+    export function isPreprocessorStatement(node: Node): node is PreprocessorStatement {
+        return node.kind === SyntaxKind.PreprocessorStatement;
+    }
 
     export function isBlock(node: Node): node is Block {
         return node.kind === SyntaxKind.Block;
@@ -6716,6 +6726,7 @@ namespace ts {
             case SyntaxKind.JsxSelfClosingElement:
             case SyntaxKind.JsxFragment:
             case SyntaxKind.TaggedTemplateExpression:
+            case SyntaxKind.PreprocessorExpression:
             case SyntaxKind.ArrayLiteralExpression:
             case SyntaxKind.ParenthesizedExpression:
             case SyntaxKind.ObjectLiteralExpression:

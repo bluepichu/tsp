@@ -5234,5 +5234,18 @@
     "JSX expressions may not use the comma operator. Did you mean to write an array?": {
         "category": "Error",
         "code": 18007
+    },
+
+    "Preprocessor expression with tag '{0}' must be replaced by a preprocessor before typechecking.": {
+        "category": "Error",
+        "code": 99900
+    },
+    "Preprocessor statement with tag '{0}' must be replaced by a preprocessor before typechecking.": {
+        "category": "Error",
+        "code": 99901
+    },
+    "Generic preprocessor error.": {
+        "category": "Error",
+        "code": 99992
     }
 }

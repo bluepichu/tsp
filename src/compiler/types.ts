@@ -148,6 +148,8 @@ namespace ts {
         CloseParenToken,
         OpenBracketToken,
         CloseBracketToken,
+        HashToken,
+        HashHashToken,
         DotToken,
         DotDotDotToken,
         SemicolonToken,
@@ -328,6 +330,7 @@ namespace ts {
         ArrayBindingPattern,
         BindingElement,
         // Expression
+        PreprocessorExpression,
         ArrayLiteralExpression,
         ObjectLiteralExpression,
         PropertyAccessExpression,
@@ -362,6 +365,8 @@ namespace ts {
         TemplateSpan,
         SemicolonClassElement,
         // Element
+
+        PreprocessorStatement,
         Block,
         EmptyStatement,
         VariableStatement,
@@ -631,7 +636,7 @@ namespace ts {
         kind: SyntaxKind;
         flags: NodeFlags;
         /* @internal */ modifierFlagsCache: ModifierFlags;
-        /* @internal */ transformFlags: TransformFlags;       // Flags for transforms, possibly undefined
+        transformFlags: TransformFlags;                       // Flags for transforms, possibly undefined
         decorators?: NodeArray<Decorator>;                    // Array of decorators (in document order)
         modifiers?: ModifiersArray;                           // Array of modifiers
         /* @internal */ id?: number;                          // Unique id (used to look up NodeLinks)
@@ -1764,6 +1769,13 @@ namespace ts {
         expression: Expression;
     }
 
+    export interface PreprocessorExpression extends PrimaryExpression {
+        kind: SyntaxKind.PreprocessorExpression;
+        processed: boolean;
+        name: string;
+        arguments: NodeArray<Expression>;
+    }
+
     export interface ArrayLiteralExpression extends PrimaryExpression {
         kind: SyntaxKind.ArrayLiteralExpression;
         elements: NodeArray<Expression>;
@@ -2048,8 +2060,16 @@ namespace ts {
 
     export type BlockLike = SourceFile | Block | ModuleBlock | CaseOrDefaultClause;
 
+    export interface PreprocessorStatement extends Statement {
+        kind: SyntaxKind.PreprocessorStatement;
+        processed: boolean;
+        name: string;
+        arguments: NodeArray<Statement>;
+    }
+
     export interface Block extends Statement {
         kind: SyntaxKind.Block;
+        processed: boolean;
         statements: NodeArray<Statement>;
         /*@internal*/ multiLine?: boolean;
     }
@@ -2793,6 +2813,9 @@ namespace ts {
         // as well as code diagnostics).
         /* @internal */ parseDiagnostics: DiagnosticWithLocation[];
 
+        // File-level diagnostics reported by preprocessors.
+        /* @internal */ preprocessorDiagnostics: DiagnosticWithLocation[];
+
         // File-level diagnostics reported by the binder.
         /* @internal */ bindDiagnostics: DiagnosticWithLocation[];
         /* @internal */ bindSuggestionDiagnostics?: DiagnosticWithLocation[];
@@ -3086,7 +3109,7 @@ namespace ts {
         /*@internal*/ getProbableSymlinks(): ReadonlyMap<string>;
     }
 
-    /* @internal */
+
     export type RedirectTargetsMap = ReadonlyMap<readonly string[]>;
 
     export interface ResolvedProjectReference {
@@ -3174,7 +3197,7 @@ namespace ts {
         /* @internal */ exportedModulesFromDeclarationEmit?: ExportedModulesFromDeclarationEmit;
     }
 
-    /* @internal */
+
     export interface TypeCheckerHost extends ModuleSpecifierResolutionHost {
         getCompilerOptions(): CompilerOptions;
 
@@ -3355,7 +3378,7 @@ namespace ts {
         /* @internal */ getSymbolWalker(accept?: (symbol: Symbol) => boolean): SymbolWalker;
 
         // Should not be called directly.  Should only be accessed through the Program instance.
-        /* @internal */ getDiagnostics(sourceFile?: SourceFile, cancellationToken?: CancellationToken): Diagnostic[];
+        getDiagnostics(sourceFile?: SourceFile, cancellationToken?: CancellationToken): Diagnostic[];
         /* @internal */ getGlobalDiagnostics(): Diagnostic[];
         /* @internal */ getEmitResolver(sourceFile?: SourceFile, cancellationToken?: CancellationToken): EmitResolver;
 
@@ -4778,6 +4801,19 @@ namespace ts {
         name: string;
     }
 
+    export interface PreprocessorImport {
+        name: string;
+        options?: any;
+    }
+
+    export interface PreprocessorContext {
+        emitDiagnostic: (diagnostic: Omit<DiagnosticWithLocation, "file">) => void;
+    }
+
+    export interface PreprocessorModule {
+        process(sf: SourceFile, options: any, context: PreprocessorContext): SourceFile;
+    }
+
     export interface ProjectReference {
         /** A normalized path on disk */
         path: string;
@@ -4860,6 +4896,7 @@ namespace ts {
         outFile?: string;
         paths?: MapLike<string[]>;
         /*@internal*/ plugins?: PluginImport[];
+        preprocessors?: PreprocessorImport[];
         preserveConstEnums?: boolean;
         preserveSymlinks?: boolean;
         /* @internal */ preserveWatchOutput?: boolean;
@@ -5366,7 +5403,6 @@ namespace ts {
         forEachResolvedProjectReference<T>(cb: (resolvedProjectReference: ResolvedProjectReference | undefined, resolvedProjectReferencePath: Path) => T | undefined): T | undefined;
     }
 
-    /* @internal */
     export const enum TransformFlags {
         None = 0,
 
@@ -5396,6 +5432,9 @@ namespace ts {
         ContainsHoistedDeclarationOrCompletion = 1 << 18,
         ContainsDynamicImport = 1 << 19,
         ContainsClassFields = 1 << 20,
+
+        // Aded for tsp.  Might conflict with core TS in the future, figure out what to do here.
+        PreBinder = 1 << 28,
 
         // Please leave this as 1 << 29.
         // It is the maximum bit we can set before we outgrow the size of a v8 small integer (SMI) on an x86 system.

@@ -1331,6 +1331,18 @@ namespace ts {
                     case SyntaxKind.SemicolonClassElement:
                         return emitSemicolonClassElement();
 
+                    // Preprocessor
+                    case SyntaxKind.PreprocessorStatement:
+                        // Ehh close enough
+                        // let pps = (<PreprocessorStatement>node);
+                        // Debug.assert(pps.processed, `Preprocessor statement with tag '${pps.name}' was not parsed.`);
+                        return emitList(node, (<PreprocessorStatement>node).arguments, ListFormat.MultiLineBlockStatements);
+                    case SyntaxKind.PreprocessorExpression:
+                        // let ppe = (<PreprocessorExpression>node);
+                        // Debug.assert(ppe.processed, `Preprocessor expression with tag '${ppe.name}' was not parsed.`);
+                        // Debug.assertEqual((<PreprocessorExpression>node).arguments.length, 1, `Preprocessor expression with tag ${ppe.name} did not generate exactly one expression.`);
+                        return emitExpression((<PreprocessorExpression>node).arguments[0]);
+
                     // Statements
                     case SyntaxKind.Block:
                         return emitBlock(<Block>node);

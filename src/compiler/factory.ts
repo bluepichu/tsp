@@ -10,6 +10,9 @@ namespace ts {
         if (updated !== original) {
             setOriginalNode(updated, original);
             setTextRange(updated, original);
+            if (original.transformFlags & ts.TransformFlags.PreBinder) {
+                updated.transformFlags = ts.TransformFlags.PreBinder;
+            }
             aggregateTransformFlags(updated);
         }
         return updated;
@@ -154,7 +157,7 @@ namespace ts {
     export function createTempVariable(recordTempVariable: ((node: Identifier) => void) | undefined): Identifier;
     /* @internal */ export function createTempVariable(recordTempVariable: ((node: Identifier) => void) | undefined, reservedInNestedScopes: boolean): GeneratedIdentifier;
     export function createTempVariable(recordTempVariable: ((node: Identifier) => void) | undefined, reservedInNestedScopes?: boolean): GeneratedIdentifier {
-        const name = createIdentifier("") as GeneratedIdentifier;
+        const name = createIdentifier(`_tmp_${nextAutoGenerateId}`) as GeneratedIdentifier;
         name.autoGenerateFlags = GeneratedIdentifierFlags.Auto;
         name.autoGenerateId = nextAutoGenerateId;
         nextAutoGenerateId++;
@@ -1030,6 +1033,20 @@ namespace ts {
 
     // Expression
 
+    export function createPreprocessorExpression(name: string, args: readonly Expression[], processed: boolean) {
+        const node = <PreprocessorExpression>createSynthesizedNode(SyntaxKind.PreprocessorExpression);
+        node.name = name;
+        node.processed = processed;
+        node.arguments = parenthesizeListElements(createNodeArray(args));
+        return node;
+    }
+
+    export function updatePreprocessorExpression(node: PreprocessorExpression, args: readonly Expression[], processed: boolean) {
+        return node.arguments !== args
+            ? updateNode(createPreprocessorExpression(node.name, args, processed), node)
+            : node;
+    }
+
     export function createArrayLiteral(elements?: readonly Expression[], multiLine?: boolean) {
         const node = <ArrayLiteralExpression>createSynthesizedNode(SyntaxKind.ArrayLiteralExpression);
         node.elements = parenthesizeListElements(createNodeArray(elements));
@@ -1611,6 +1628,20 @@ namespace ts {
     }
 
     // Element
+
+    export function createPreprocessorStatement(name: string, args: readonly Statement[], processed: boolean): PreprocessorStatement {
+        const node = <PreprocessorStatement>createSynthesizedNode(SyntaxKind.PreprocessorStatement);
+        node.name = name;
+        node.processed = processed;
+        node.arguments = createNodeArray(args);
+        return node;
+    }
+
+    export function updatePreprocessorStatement(node: PreprocessorStatement, args: readonly Statement[], processed: boolean) {
+        return node.arguments !== args
+            ? updateNode(createPreprocessorStatement(node.name, args, processed), node)
+            : node;
+    }
 
     export function createBlock(statements: readonly Statement[], multiLine?: boolean): Block {
         const block = <Block>createSynthesizedNode(SyntaxKind.Block);
@@ -2662,6 +2693,7 @@ namespace ts {
             if (node.identifierCount !== undefined) updated.identifierCount = node.identifierCount;
             if (node.symbolCount !== undefined) updated.symbolCount = node.symbolCount;
             if (node.parseDiagnostics !== undefined) updated.parseDiagnostics = node.parseDiagnostics;
+            if (node.preprocessorDiagnostics !== undefined) updated.preprocessorDiagnostics = node.preprocessorDiagnostics;
             if (node.bindDiagnostics !== undefined) updated.bindDiagnostics = node.bindDiagnostics;
             if (node.bindSuggestionDiagnostics !== undefined) updated.bindSuggestionDiagnostics = node.bindSuggestionDiagnostics;
             if (node.lineMap !== undefined) updated.lineMap = node.lineMap;

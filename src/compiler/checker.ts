@@ -1,4 +1,4 @@
-/* @internal */
+
 namespace ts {
     const ambientModuleSymbolRegex = /^".+"$/;
 
@@ -2961,12 +2961,16 @@ namespace ts {
         function getMergedSymbol(symbol: Symbol | undefined): Symbol | undefined;
         function getMergedSymbol(symbol: Symbol | undefined): Symbol | undefined {
             let merged: Symbol;
+            // var inspect = require("util").inspect;
+            // console.log("getMergedSymbol:", inspect(symbol));
             return symbol && symbol.mergeId && (merged = mergedSymbols[symbol.mergeId]) ? merged : symbol;
         }
 
         function getSymbolOfNode(node: Declaration): Symbol;
         function getSymbolOfNode(node: Node): Symbol | undefined;
         function getSymbolOfNode(node: Node): Symbol | undefined {
+            // var inspect = require("util").inspect;
+            // console.log("getSymbolOfNode:", inspect(node));
             return getMergedSymbol(node.symbol && getLateBoundSymbol(node.symbol));
         }
 
@@ -3185,7 +3189,10 @@ namespace ts {
 
         function forEachSymbolTableInScope<T>(enclosingDeclaration: Node | undefined, callback: (symbolTable: SymbolTable) => T): T {
             let result: T;
+            var inspect = require("util").inspect;
+            console.log("forEachSymbolTableInScope:", inspect(enclosingDeclaration));
             for (let location = enclosingDeclaration; location; location = location.parent) {
+                console.log("location ->", inspect(location));
                 // Locals of a source file are not in scope (because they get merged into the global symbol table)
                 if (location.locals && !isGlobalSourceFile(location)) {
                     if (result = callback(location.locals)) {
@@ -27158,6 +27165,8 @@ namespace ts {
                     return checkTemplateExpression(<TemplateExpression>node);
                 case SyntaxKind.RegularExpressionLiteral:
                     return globalRegExpType;
+                // case SyntaxKind.PreprocessorExpression:
+                //     return errorOnNode
                 case SyntaxKind.ArrayLiteralExpression:
                     return checkArrayLiteral(<ArrayLiteralExpression>node, checkMode, forceTuple);
                 case SyntaxKind.ObjectLiteralExpression:
@@ -29718,6 +29727,22 @@ namespace ts {
         function checkBindingElement(node: BindingElement) {
             checkGrammarBindingElement(node);
             return checkVariableLikeDeclaration(node);
+        }
+
+        function checkPreprocessorStatement(node: PreprocessorStatement) {
+            // Grammar checking
+            checkGrammarStatementInAmbientContext(node);
+
+            if (!node.processed) {
+                error(
+                    node,
+                    Diagnostics.Preprocessor_statement_with_tag_0_must_be_replaced_by_a_preprocessor_before_typechecking,
+                    node.name
+                );
+                return;
+            }
+
+            node.arguments.forEach(checkSourceElement);
         }
 
         function checkVariableStatement(node: VariableStatement) {
@@ -32393,6 +32418,8 @@ namespace ts {
                 case SyntaxKind.Block:
                 case SyntaxKind.ModuleBlock:
                     return checkBlock(<Block>node);
+                case SyntaxKind.PreprocessorStatement:
+                    return checkPreprocessorStatement(<PreprocessorStatement>node);
                 case SyntaxKind.VariableStatement:
                     return checkVariableStatement(<VariableStatement>node);
                 case SyntaxKind.ExpressionStatement:

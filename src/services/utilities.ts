@@ -714,6 +714,12 @@ namespace ts {
                 }
 
                 const end = child.getEnd();
+
+                // Ignore children that take up no space (i.e. preprocessor-generated nodes)
+                if (start === end) {
+                    continue;
+                }
+
                 if (position < end || (position === end && (child.kind === SyntaxKind.EndOfFileToken || includeEndPosition))) {
                     current = child;
                     continue outer;

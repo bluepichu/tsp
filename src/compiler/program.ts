@@ -89,7 +89,9 @@ namespace ts {
                 }
                 text = "";
             }
-            return text !== undefined ? createSourceFile(fileName, text, languageVersion, setParentNodes) : undefined;
+            return text !== undefined
+                ? preprocess(createSourceFile(fileName, text, languageVersion, setParentNodes), options)
+                : undefined;
         }
 
         function directoryExists(directoryPath: string): boolean {
@@ -1688,7 +1690,7 @@ namespace ts {
                 }
                 return concatenate(sourceFile.additionalSyntacticDiagnostics, sourceFile.parseDiagnostics);
             }
-            return sourceFile.parseDiagnostics;
+            return concatenate(sourceFile.parseDiagnostics, sourceFile.preprocessorDiagnostics);
         }
 
         function runWithCancellationToken<T>(func: () => T): T {

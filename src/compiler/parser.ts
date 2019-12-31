@@ -206,6 +206,8 @@ namespace ts {
             case SyntaxKind.ObjectBindingPattern:
             case SyntaxKind.ArrayBindingPattern:
                 return visitNodes(cbNode, cbNodes, (<BindingPattern>node).elements);
+            case SyntaxKind.PreprocessorExpression:
+                return visitNodes(cbNode, cbNodes, (<PreprocessorExpression>node).arguments);
             case SyntaxKind.ArrayLiteralExpression:
                 return visitNodes(cbNode, cbNodes, (<ArrayLiteralExpression>node).elements);
             case SyntaxKind.ObjectLiteralExpression:
@@ -264,6 +266,8 @@ namespace ts {
                     visitNode(cbNode, (<ConditionalExpression>node).whenFalse);
             case SyntaxKind.SpreadElement:
                 return visitNode(cbNode, (<SpreadElement>node).expression);
+            case SyntaxKind.PreprocessorStatement:
+                return visitNodes(cbNode, cbNodes, (<PreprocessorStatement>node).arguments);
             case SyntaxKind.Block:
             case SyntaxKind.ModuleBlock:
                 return visitNodes(cbNode, cbNodes, (<Block>node).statements);
@@ -862,9 +866,13 @@ namespace ts {
             sourceFile.identifiers = identifiers;
             sourceFile.parseDiagnostics = parseDiagnostics;
 
+            console.log("near the end:", sourceFile.transformFlags);
+
             if (setParentNodes) {
                 fixupParentReferences(sourceFile);
             }
+
+            console.log("nearer the end:", sourceFile.transformFlags);
 
             return sourceFile;
 
@@ -919,6 +927,7 @@ namespace ts {
             nodeCount++;
 
             sourceFile.text = sourceText;
+            sourceFile.preprocessorDiagnostics = [];
             sourceFile.bindDiagnostics = [];
             sourceFile.bindSuggestionDiagnostics = undefined;
             sourceFile.languageVersion = languageVersion;
@@ -1509,6 +1518,8 @@ namespace ts {
             }
 
             switch (parsingContext) {
+                case ParsingContext.PreprocessorStatementArguments:
+                    return isStartOfStatement();
                 case ParsingContext.SourceElements:
                 case ParsingContext.BlockStatements:
                 case ParsingContext.SwitchClauseStatements:
@@ -1659,6 +1670,8 @@ namespace ts {
             }
 
             switch (kind) {
+                case ParsingContext.PreprocessorStatementArguments:
+                    return token() === SyntaxKind.CloseBracketToken;
                 case ParsingContext.BlockStatements:
                 case ParsingContext.SwitchClauses:
                 case ParsingContext.TypeMembers:
@@ -1756,6 +1769,8 @@ namespace ts {
                     continue;
                 }
 
+                console.log("Invalid list element", token());
+
                 if (abortParsingListOrMoveToNextToken(kind)) {
                     break;
                 }
@@ -1840,6 +1855,7 @@ namespace ts {
                 case ParsingContext.ClassMembers:
                 case ParsingContext.SwitchClauses:
                 case ParsingContext.SourceElements:
+                case ParsingContext.PreprocessorStatementArguments:
                 case ParsingContext.BlockStatements:
                 case ParsingContext.SwitchClauseStatements:
                 case ParsingContext.EnumMembers:
@@ -1860,6 +1876,7 @@ namespace ts {
                 case ParsingContext.SwitchClauses:
                     return isReusableSwitchClause(node);
 
+                case ParsingContext.PreprocessorStatementArguments:
                 case ParsingContext.SourceElements:
                 case ParsingContext.BlockStatements:
                 case ParsingContext.SwitchClauseStatements:
@@ -4775,7 +4792,7 @@ namespace ts {
                 case SyntaxKind.OpenParenToken:
                     return parseParenthesizedExpression();
                 case SyntaxKind.OpenBracketToken:
-                    return parseArrayLiteralExpression();
+                    return parseArrayLiteralOrPreprocessorExpression();
                 case SyntaxKind.OpenBraceToken:
                     return parseObjectLiteralExpression();
                 case SyntaxKind.AsyncKeyword:
@@ -4829,6 +4846,34 @@ namespace ts {
 
         function parseArgumentExpression(): Expression {
             return doOutsideOfContext(disallowInAndDecoratorContext, parseArgumentOrArrayLiteralElement);
+        }
+
+        function parseArrayLiteralOrPreprocessorExpression(): ArrayLiteralExpression | PreprocessorExpression {
+            // We have to lookahead past the open bracket to see if it's a preprocessor expression or not.
+            if (isStartOfPreprocessorExpression()) {
+                return parsePreprocessorExpression();
+            } else {
+                return parseArrayLiteralExpression();
+            }
+        }
+
+        function isStartOfPreprocessorExpression(): boolean {
+            return lookAhead(() => {
+                parseExpected(SyntaxKind.OpenBracketToken);
+                return token() === SyntaxKind.HashToken;
+            })
+        }
+
+        function parsePreprocessorExpression(): PreprocessorExpression {
+            const node = <PreprocessorExpression>createNode(SyntaxKind.PreprocessorExpression);
+            parseExpected(SyntaxKind.OpenBracketToken);
+            parseExpected(SyntaxKind.HashToken);
+            node.name = scanner.getTokenValue();
+            nextTokenWithoutCheck();
+            node.arguments = parseDelimitedList(ParsingContext.ArrayLiteralMembers, parseArgumentOrArrayLiteralElement);
+            node.processed = false;
+            parseExpected(SyntaxKind.CloseBracketToken);
+            return finishNode(node);
         }
 
         function parseArrayLiteralExpression(): ArrayLiteralExpression {
@@ -5023,6 +5068,18 @@ namespace ts {
         function parseEmptyStatement(): Statement {
             const node = <Statement>createNode(SyntaxKind.EmptyStatement);
             parseExpected(SyntaxKind.SemicolonToken);
+            return finishNode(node);
+        }
+
+        function parsePreprocessorStatement(): PreprocessorStatement {
+            const node = <PreprocessorStatement>createNode(SyntaxKind.PreprocessorStatement);
+            parseExpected(SyntaxKind.OpenBracketToken);
+            parseExpected(SyntaxKind.HashHashToken);
+            node.name = scanner.getTokenValue();
+            nextTokenWithoutCheck();
+            node.arguments = parseDelimitedList(ParsingContext.PreprocessorStatementArguments, parseStatement);
+            node.processed = false;
+            parseExpected(SyntaxKind.CloseBracketToken);
             return finishNode(node);
         }
 
@@ -5434,10 +5491,22 @@ namespace ts {
             return lookAhead(nextTokenIsIdentifierOrStartOfDestructuring);
         }
 
+        function isPreprocessorStatementDeclaration() {
+            return lookAhead(() => {
+                nextToken();
+                return token() === SyntaxKind.HashHashToken;
+            });
+        }
+
         function parseStatement(): Statement {
             switch (token()) {
                 case SyntaxKind.SemicolonToken:
                     return parseEmptyStatement();
+                case SyntaxKind.OpenBracketToken:
+                    if (isPreprocessorStatementDeclaration()) {
+                        return parsePreprocessorStatement();
+                    }
+                    break;
                 case SyntaxKind.OpenBraceToken:
                     return parseBlock(/*ignoreMissingOpenBrace*/ false);
                 case SyntaxKind.VarKeyword:
@@ -6478,6 +6547,7 @@ namespace ts {
             TupleElementTypes,         // Element types in tuple element type list
             HeritageClauses,           // Heritage clauses for a class or interface declaration.
             ImportOrExportSpecifiers,  // Named import clause's import specifier list
+            PreprocessorStatementArguments, // Arguments to a preprocessor statement
             Count                      // Number of parsing contexts
         }
 
