@@ -70,11 +70,37 @@ namespace ts {
         return createCompilerHostWorker(options, setParentNodes);
     }
 
+    export function getPreprocessors(options: CompilerOptions): Preprocessors {
+        let preprocessors: Preprocessors = {
+            expressions: new MapCtr(),
+            statements: new MapCtr()
+        };
+
+        if (options.preprocessors) {
+            options.preprocessors.forEach((preprocessorImport) => {
+                let path = require.resolve(preprocessorImport.name, { paths: [options.configFilePath!] });
+                let preprocessor: PreprocessorModule = require(path);
+                preprocessor.default({
+                    registerPreprocessorExpression(tag, fn) {
+                        preprocessors.expressions.set(tag, fn);
+                    },
+                    registerPreprocessorStatement(tag, fn) {
+                        preprocessors.statements.set(tag, fn);
+                    }
+                });
+            });
+        }
+
+        return preprocessors;
+    }
+
     /*@internal*/
     // TODO(shkamat): update this after reworking ts build API
     export function createCompilerHostWorker(options: CompilerOptions, setParentNodes?: boolean, system = sys): CompilerHost {
         const existingDirectories = createMap<boolean>();
         const getCanonicalFileName = createGetCanonicalFileName(system.useCaseSensitiveFileNames);
+        const preprocessors = getPreprocessors(options);
+
         function getSourceFile(fileName: string, languageVersion: ScriptTarget, onError?: (message: string) => void): SourceFile | undefined {
             let text: string | undefined;
             try {
@@ -89,8 +115,9 @@ namespace ts {
                 }
                 text = "";
             }
+
             return text !== undefined
-                ? preprocess(createSourceFile(fileName, text, languageVersion, setParentNodes), options)
+                ? createSourceFile(fileName, text, languageVersion, setParentNodes, undefined /* scriptKind */, preprocessors)
                 : undefined;
         }
 
@@ -1223,6 +1250,10 @@ namespace ts {
                 return StructureIsReused.Not;
             }
 
+            if (1 === 1) {
+                return StructureIsReused.Not; // FIXME: need to work out how to do this with preprocessors
+            }
+
             // check properties that can affect structure of the program or module resolution strategy
             // if any of these properties has changed - structure cannot be reused
             const oldOptions = oldProgram.getCompilerOptions();
@@ -1690,7 +1721,7 @@ namespace ts {
                 }
                 return concatenate(sourceFile.additionalSyntacticDiagnostics, sourceFile.parseDiagnostics);
             }
-            return concatenate(sourceFile.parseDiagnostics, sourceFile.preprocessorDiagnostics);
+            return sourceFile.parseDiagnostics;
         }
 
         function runWithCancellationToken<T>(func: () => T): T {

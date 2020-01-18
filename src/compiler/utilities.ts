@@ -573,6 +573,7 @@ namespace ts {
             (isNumericLiteral(node) && node.numericLiteralFlags & TokenFlags.ContainsSeparator) ||
             isBigIntLiteral(node)
         )) {
+            console.log("why are we here?!");
             return getSourceTextOfNodeFromSourceFile(sourceFile, node);
         }
 
@@ -849,7 +850,12 @@ namespace ts {
     // Computed property names will just be emitted as "[<expr>]", where <expr> is the source
     // text of the expression in the computed property.
     export function declarationNameToString(name: DeclarationName | QualifiedName | undefined) {
-        return !name || getFullWidth(name) === 0 ? "(Missing)" : getTextOfNode(name);
+        return (
+            !name ? "(Missing)" :
+            name.kind === SyntaxKind.Identifier && (name.flags & NodeFlags.Synthesized) && name.autoGenerateFlags === GeneratedIdentifierFlags.None ? unescapeLeadingUnderscores(name.escapedText) :
+            getFullWidth(name) === 0 ? "(Missing)" :
+            getTextOfNode(name)
+        );
     }
 
     export function getNameFromIndexInfo(info: IndexInfo): string | undefined {
@@ -896,13 +902,31 @@ namespace ts {
     }
 
     export function createDiagnosticForNodeInSourceFile(sourceFile: SourceFile, node: Node, message: DiagnosticMessage, arg0?: string | number, arg1?: string | number, arg2?: string | number, arg3?: string | number): DiagnosticWithLocation {
-        const span = getErrorSpanForNode(sourceFile, node);
+        if (node.flags & NodeFlags.CreatedInPreprocessor) {
+            // If the node came from a preprocessor, we should use the preprocessor's text range
+            let preprocessedNode = node as PreprocessedNode;
+            return createFileDiagnostic(
+                sourceFile,
+                preprocessedNode.preprocessor.tag.pos,
+                preprocessedNode.preprocessor.tag.end - preprocessedNode.preprocessor.tag.pos,
+                message,
+                arg0,
+                arg1,
+                arg2,
+                arg3
+            );
+        }
+        const span = (node.flags & NodeFlags.CreatedInPreprocessor)
+            ? createTextSpanFromBounds((<PreprocessedNode>node).preprocessor.tag.pos, (<PreprocessedNode>node).preprocessor.tag.end)
+            : getErrorSpanForNode(sourceFile, node);
         return createFileDiagnostic(sourceFile, span.start, span.length, message, arg0, arg1, arg2, arg3);
     }
 
     export function createDiagnosticForNodeFromMessageChain(node: Node, messageChain: DiagnosticMessageChain, relatedInformation?: DiagnosticRelatedInformation[]): DiagnosticWithLocation {
         const sourceFile = getSourceFileOfNode(node);
-        const span = getErrorSpanForNode(sourceFile, node);
+        const span = (node.flags & NodeFlags.CreatedInPreprocessor)
+            ? createTextSpanFromBounds((<PreprocessedNode>node).preprocessor.tag.pos, (<PreprocessedNode>node).preprocessor.tag.end)
+            : getErrorSpanForNode(sourceFile, node);
         return {
             file: sourceFile,
             start: span.start,
@@ -1669,7 +1693,6 @@ namespace ts {
             case SyntaxKind.TrueKeyword:
             case SyntaxKind.FalseKeyword:
             case SyntaxKind.RegularExpressionLiteral:
-            case SyntaxKind.PreprocessorExpression:
             case SyntaxKind.ArrayLiteralExpression:
             case SyntaxKind.ObjectLiteralExpression:
             case SyntaxKind.PropertyAccessExpression:
@@ -3091,7 +3114,6 @@ namespace ts {
             case SyntaxKind.NumericLiteral:
             case SyntaxKind.BigIntLiteral:
             case SyntaxKind.StringLiteral:
-            case SyntaxKind.PreprocessorExpression:
             case SyntaxKind.ArrayLiteralExpression:
             case SyntaxKind.ObjectLiteralExpression:
             case SyntaxKind.FunctionExpression:
@@ -5791,10 +5813,6 @@ namespace ts {
 
     // Expression
 
-    export function isPreprocessorExpression(node: Node): node is PreprocessorExpression {
-        return node.kind === SyntaxKind.PreprocessorExpression;
-    }
-
     export function isArrayLiteralExpression(node: Node): node is ArrayLiteralExpression {
         return node.kind === SyntaxKind.ArrayLiteralExpression;
     }
@@ -5933,10 +5951,6 @@ namespace ts {
     }
 
     // Block
-
-    export function isPreprocessorStatement(node: Node): node is PreprocessorStatement {
-        return node.kind === SyntaxKind.PreprocessorStatement;
-    }
 
     export function isBlock(node: Node): node is Block {
         return node.kind === SyntaxKind.Block;
@@ -6726,7 +6740,6 @@ namespace ts {
             case SyntaxKind.JsxSelfClosingElement:
             case SyntaxKind.JsxFragment:
             case SyntaxKind.TaggedTemplateExpression:
-            case SyntaxKind.PreprocessorExpression:
             case SyntaxKind.ArrayLiteralExpression:
             case SyntaxKind.ParenthesizedExpression:
             case SyntaxKind.ObjectLiteralExpression:

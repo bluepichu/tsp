@@ -330,7 +330,6 @@ namespace ts {
         ArrayBindingPattern,
         BindingElement,
         // Expression
-        PreprocessorExpression,
         ArrayLiteralExpression,
         ObjectLiteralExpression,
         PropertyAccessExpression,
@@ -366,7 +365,6 @@ namespace ts {
         SemicolonClassElement,
         // Element
 
-        PreprocessorStatement,
         Block,
         EmptyStatement,
         VariableStatement,
@@ -569,6 +567,8 @@ namespace ts {
         /* @internal */ InWithStatement               = 1 << 23, // If any ancestor of node was the `statement` of a WithStatement (not the `expression`)
         JsonFile                                      = 1 << 24, // If node was parsed in a Json
 
+        CreatedInPreprocessor                         = 1 << 25, // If node was touched by a preprocessor
+
         BlockScoped = Let | Const,
 
         ReachabilityCheckFlags = HasImplicitReturn | HasExplicitReturn,
@@ -643,13 +643,20 @@ namespace ts {
         parent: Node;                                         // Parent node (initialized by binding)
         /* @internal */ original?: Node;                      // The original node if this is an updated node.
         /* @internal */ symbol: Symbol;                       // Symbol declared by node (initialized by binding)
-        /* @internal */ locals?: SymbolTable;                 // Locals associated with node (initialized by binding)
+        /* @internal */  locals?: SymbolTable;                 // Locals associated with node (initialized by binding)
         /* @internal */ nextContainer?: Node;                 // Next container in declaration order (initialized by binding)
         /* @internal */ localSymbol?: Symbol;                 // Local symbol declared by node (initialized by binding only for exported nodes)
         /* @internal */ flowNode?: FlowNode;                  // Associated FlowNode (initialized by binding)
         /* @internal */ emitNode?: EmitNode;                  // Associated EmitNode (initialized by transforms)
         /* @internal */ contextualType?: Type;                // Used to temporarily assign a contextual type during overload resolution
         /* @internal */ inferenceContext?: InferenceContext;  // Inference context for contextual type
+    }
+
+    export interface PreprocessedNode extends Node {
+        preprocessor: {
+            tag: TextRange;
+            self: TextRange;
+        };
     }
 
     export interface JSDocContainer {
@@ -1769,13 +1776,6 @@ namespace ts {
         expression: Expression;
     }
 
-    export interface PreprocessorExpression extends PrimaryExpression {
-        kind: SyntaxKind.PreprocessorExpression;
-        processed: boolean;
-        name: string;
-        arguments: NodeArray<Expression>;
-    }
-
     export interface ArrayLiteralExpression extends PrimaryExpression {
         kind: SyntaxKind.ArrayLiteralExpression;
         elements: NodeArray<Expression>;
@@ -2059,13 +2059,6 @@ namespace ts {
     }
 
     export type BlockLike = SourceFile | Block | ModuleBlock | CaseOrDefaultClause;
-
-    export interface PreprocessorStatement extends Statement {
-        kind: SyntaxKind.PreprocessorStatement;
-        processed: boolean;
-        name: string;
-        arguments: NodeArray<Statement>;
-    }
 
     export interface Block extends Statement {
         kind: SyntaxKind.Block;
@@ -2813,9 +2806,6 @@ namespace ts {
         // as well as code diagnostics).
         /* @internal */ parseDiagnostics: DiagnosticWithLocation[];
 
-        // File-level diagnostics reported by preprocessors.
-        /* @internal */ preprocessorDiagnostics: DiagnosticWithLocation[];
-
         // File-level diagnostics reported by the binder.
         /* @internal */ bindDiagnostics: DiagnosticWithLocation[];
         /* @internal */ bindSuggestionDiagnostics?: DiagnosticWithLocation[];
@@ -2847,6 +2837,8 @@ namespace ts {
         /* @internal */ localJsxFactory?: EntityName;
 
         /*@internal*/ exportedModulesFromDeclarationEmit?: ExportedModulesFromDeclarationEmit;
+
+        /*@internal*/ preprocessors?: Preprocessors;
     }
 
     /*@internal*/
@@ -4769,13 +4761,17 @@ namespace ts {
     export interface DiagnosticRelatedInformation {
         category: DiagnosticCategory;
         code: number;
-        file: SourceFile | undefined;
-        start: number | undefined;
-        length: number | undefined;
+        file?: SourceFile;
+        start?: number;
+        length?: number;
         messageText: string | DiagnosticMessageChain;
     }
     export interface DiagnosticWithLocation extends Diagnostic {
         file: SourceFile;
+        start: number;
+        length: number;
+    }
+    export interface DiagnosticWithLocationFromPreprocessor extends Diagnostic {
         start: number;
         length: number;
     }
@@ -4807,11 +4803,24 @@ namespace ts {
     }
 
     export interface PreprocessorContext {
-        emitDiagnostic: (diagnostic: Omit<DiagnosticWithLocation, "file">) => void;
+        emitDiagnostic: (diagnostic: DiagnosticWithLocationFromPreprocessor) => void;
+    }
+
+    export type PreprocessorExpressionFunction = (args: NodeArray<Expression>, textRange: TextRange, context: PreprocessorContext) => Expression;
+    export type PreprocessorStatementFunction = (args: NodeArray<Statement>, textRange: TextRange, context: PreprocessorContext) => Statement;
+
+    export interface PreprocessorRegistrationContext {
+        registerPreprocessorExpression: (tag: string, fn: PreprocessorExpressionFunction) => void;
+        registerPreprocessorStatement: (tag: string, fn: PreprocessorStatementFunction) => void;
     }
 
     export interface PreprocessorModule {
-        process(sf: SourceFile, options: any, context: PreprocessorContext): SourceFile;
+        default: (context: PreprocessorRegistrationContext) => void;
+    }
+
+    export interface Preprocessors {
+        expressions: Map<PreprocessorExpressionFunction>;
+        statements: Map<PreprocessorStatementFunction>;
     }
 
     export interface ProjectReference {
@@ -5432,9 +5441,6 @@ namespace ts {
         ContainsHoistedDeclarationOrCompletion = 1 << 18,
         ContainsDynamicImport = 1 << 19,
         ContainsClassFields = 1 << 20,
-
-        // Aded for tsp.  Might conflict with core TS in the future, figure out what to do here.
-        PreBinder = 1 << 28,
 
         // Please leave this as 1 << 29.
         // It is the maximum bit we can set before we outgrow the size of a v8 small integer (SMI) on an x86 system.

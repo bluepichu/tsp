@@ -1462,6 +1462,9 @@ namespace ts {
             let isInExternalModule = false;
 
             loop: while (location) {
+                if (name as any === "str") {
+                    console.log("searching for str at", location.kind);
+                }
                 // Locals of a source file are not in scope (because they get merged into the global symbol table)
                 if (location.locals && !isGlobalSourceFile(location)) {
                     if (result = lookup(location.locals, name, meaning)) {
@@ -1510,6 +1513,7 @@ namespace ts {
                         }
 
                         if (useResult) {
+                            console.log("sgtm");
                             break loop;
                         }
                         else {
@@ -27165,8 +27169,6 @@ namespace ts {
                     return checkTemplateExpression(<TemplateExpression>node);
                 case SyntaxKind.RegularExpressionLiteral:
                     return globalRegExpType;
-                // case SyntaxKind.PreprocessorExpression:
-                //     return errorOnNode
                 case SyntaxKind.ArrayLiteralExpression:
                     return checkArrayLiteral(<ArrayLiteralExpression>node, checkMode, forceTuple);
                 case SyntaxKind.ObjectLiteralExpression:
@@ -29727,22 +29729,6 @@ namespace ts {
         function checkBindingElement(node: BindingElement) {
             checkGrammarBindingElement(node);
             return checkVariableLikeDeclaration(node);
-        }
-
-        function checkPreprocessorStatement(node: PreprocessorStatement) {
-            // Grammar checking
-            checkGrammarStatementInAmbientContext(node);
-
-            if (!node.processed) {
-                error(
-                    node,
-                    Diagnostics.Preprocessor_statement_with_tag_0_must_be_replaced_by_a_preprocessor_before_typechecking,
-                    node.name
-                );
-                return;
-            }
-
-            node.arguments.forEach(checkSourceElement);
         }
 
         function checkVariableStatement(node: VariableStatement) {
@@ -32418,8 +32404,6 @@ namespace ts {
                 case SyntaxKind.Block:
                 case SyntaxKind.ModuleBlock:
                     return checkBlock(<Block>node);
-                case SyntaxKind.PreprocessorStatement:
-                    return checkPreprocessorStatement(<PreprocessorStatement>node);
                 case SyntaxKind.VariableStatement:
                     return checkVariableStatement(<VariableStatement>node);
                 case SyntaxKind.ExpressionStatement:

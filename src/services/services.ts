@@ -563,7 +563,6 @@ namespace ts {
 
         public syntacticDiagnostics!: DiagnosticWithLocation[];
         public parseDiagnostics!: DiagnosticWithLocation[];
-        public preprocessorDiagnostics!: DiagnosticWithLocation[];
         public bindDiagnostics!: DiagnosticWithLocation[];
         public bindSuggestionDiagnostics?: DiagnosticWithLocation[];
 
@@ -1010,8 +1009,8 @@ namespace ts {
     }
 
     export function createLanguageServiceSourceFile(fileName: string, scriptSnapshot: IScriptSnapshot, scriptTarget: ScriptTarget, version: string, setNodeParents: boolean, options: CompilerOptions, scriptKind?: ScriptKind): SourceFile {
-        let sourceFile = createSourceFile(fileName, getSnapshotText(scriptSnapshot), scriptTarget, setNodeParents, scriptKind);
-        sourceFile = preprocess(sourceFile, options);
+        options = options; // f off ts
+        let sourceFile = createSourceFile(fileName, getSnapshotText(scriptSnapshot), scriptTarget, setNodeParents, scriptKind, getPreprocessors(options));
         setSourceFileFields(sourceFile, scriptSnapshot, version);
         return sourceFile;
     }

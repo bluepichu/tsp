@@ -281,14 +281,10 @@ namespace ts {
 
         function createSymbol(flags: SymbolFlags, name: __String): Symbol {
             symbolCount++;
-            if (file.fileName.endsWith("tsp-test/src/index.ts"))
-                console.log("binding:", name, flags);
             return new Symbol(flags, name);
         }
 
         function addDeclarationToSymbol(symbol: Symbol, node: Declaration, symbolFlags: SymbolFlags) {
-            // var inspect = (obj: any) => JSON.stringify(obj, function (k, v) { return k && v && typeof v !== "number" ? (Array.isArray(v) ? "[object Array]" : "" + v) : v; });
-            // console.log("declaration:", inspect(symbol), inspect(node), symbolFlags);
             symbol.flags |= symbolFlags;
 
             node.symbol = symbol;
@@ -684,26 +680,21 @@ namespace ts {
         }
 
         function bindChildren(node: Node): void {
-            // console.log("binding children of", node.kind);
             if (skipTransformFlagAggregation) {
-                // console.log("     ^ (skipping transform flag aggregation)");
                 bindChildrenWorker(node);
             }
             else if (node.transformFlags & TransformFlags.HasComputedFlags) {
-                // console.log("     ^ (flags are already computed)");
                 skipTransformFlagAggregation = true;
                 bindChildrenWorker(node);
                 skipTransformFlagAggregation = false;
                 subtreeTransformFlags |= node.transformFlags & ~getTransformFlagsSubtreeExclusions(node.kind);
             }
             else {
-                // console.log("     ^ (computing transform flags)");
                 const savedSubtreeTransformFlags = subtreeTransformFlags;
                 subtreeTransformFlags = 0;
                 bindChildrenWorker(node);
                 subtreeTransformFlags = savedSubtreeTransformFlags | computeTransformFlagsForNode(node, subtreeTransformFlags);
             }
-            // console.log("after binding children of", node.kind, "subtree flags are", subtreeTransformFlags, "current flags are", node.transformFlags);
         }
 
         function bindEachFunctionsFirst(nodes: NodeArray<Node> | undefined): void {
@@ -4033,7 +4024,6 @@ namespace ts {
                 break;
         }
 
-        console.log(kind, node.transformFlags, subtreeFlags);
         node.transformFlags = transformFlags | TransformFlags.HasComputedFlags;
         return transformFlags & ~excludeFlags;
     }

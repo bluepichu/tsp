@@ -447,11 +447,6 @@ namespace ts {
                     visitNode((<BindingElement>node).initializer, visitor, isExpression));
 
             // Expression
-            case SyntaxKind.PreprocessorExpression:
-                return updatePreprocessorExpression(<PreprocessorExpression>node,
-                    nodesVisitor((<PreprocessorExpression>node).arguments, visitor, isExpression),
-                    (<PreprocessorExpression>node).processed);
-
             case SyntaxKind.ArrayLiteralExpression:
                 return updateArrayLiteral(<ArrayLiteralExpression>node,
                     nodesVisitor((<ArrayLiteralExpression>node).elements, visitor, isExpression));
@@ -601,11 +596,6 @@ namespace ts {
                     visitNode((<TemplateSpan>node).literal, visitor, isTemplateMiddleOrTemplateTail));
 
             // Element
-            case SyntaxKind.PreprocessorStatement:
-                return updatePreprocessorStatement(<PreprocessorStatement>node,
-                    nodesVisitor((<PreprocessorStatement>node).arguments, visitor, isStatement),
-                    (<PreprocessorStatement>node).processed);
-
             case SyntaxKind.Block:
                 return updateBlock(<Block>node,
                     nodesVisitor((<Block>node).statements, visitor, isStatement));
@@ -1508,11 +1498,6 @@ namespace ts {
         if (node === undefined) {
             return TransformFlags.None;
         }
-        if (node.transformFlags & TransformFlags.PreBinder) {
-            console.log("that's pre-binder mate", node.kind);
-            return TransformFlags.PreBinder; // if we're before the binder, exit immediately
-        }
-        console.log("not pre-binder???", node.kind);
         if (node.transformFlags & TransformFlags.HasComputedFlags) {
             return node.transformFlags & ~getTransformFlagsSubtreeExclusions(node.kind);
         }
@@ -1527,14 +1512,9 @@ namespace ts {
         let subtreeFlags = TransformFlags.None;
         let nodeArrayFlags = TransformFlags.None;
         for (const node of nodes) {
-            if (node.transformFlags & TransformFlags.PreBinder) {
-                console.log("that's pre-binder mate (2)", node.kind);
-                return TransformFlags.PreBinder; // if we're before the binder, exit immediately
-            }
             subtreeFlags |= aggregateTransformFlagsForNode(node);
             nodeArrayFlags |= node.transformFlags & ~TransformFlags.HasComputedFlags;
         }
-        console.log("not pre-binder??? (2)");
         nodes.transformFlags = nodeArrayFlags | TransformFlags.HasComputedFlags;
         return subtreeFlags;
     }

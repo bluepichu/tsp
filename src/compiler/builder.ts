@@ -791,10 +791,12 @@ namespace ts {
     }
 
     function convertToReusableDiagnosticRelatedInformation(diagnostic: DiagnosticRelatedInformation, relativeToBuildInfo: (path: string) => string): ReusableDiagnosticRelatedInformation {
-        const { file } = diagnostic;
+        const { file, start, length } = diagnostic;
         return {
             ...diagnostic,
-            file: file ? relativeToBuildInfo(file.path) : undefined
+            file: file ? relativeToBuildInfo(file.path) : undefined,
+            start: start !== undefined ? start : undefined,
+            length: length !== undefined ? length : undefined
         };
     }
 
