@@ -522,7 +522,7 @@ namespace ts {
         }
     }
 
-    export function createSourceFile(fileName: string, sourceText: string, languageVersion: ScriptTarget, setParentNodes = false, scriptKind?: ScriptKind): SourceFile {
+    export function createSourceFile(fileName: string, sourceText: string, languageVersion: ScriptTarget, setParentNodes = false, scriptKind?: ScriptKind, preprocessors?: Preprocessors): SourceFile {
         performance.mark("beforeParse");
         let result: SourceFile;
 
@@ -531,7 +531,7 @@ namespace ts {
             result = Parser.parseSourceFile(fileName, sourceText, languageVersion, /*syntaxCursor*/ undefined, setParentNodes, ScriptKind.JSON);
         }
         else {
-            result = Parser.parseSourceFile(fileName, sourceText, languageVersion, /*syntaxCursor*/ undefined, setParentNodes, scriptKind);
+            result = Parser.parseSourceFile(fileName, sourceText, languageVersion, /*syntaxCursor*/ undefined, setParentNodes, scriptKind, preprocessors);
         }
         perfLogger.logStopParseSourceFile();
 
@@ -624,6 +624,8 @@ namespace ts {
 
         let notParenthesizedArrow: Map<true> | undefined;
 
+        let preprocessors: Preprocessors | undefined;
+
         // Flags that dictate what parsing context we're in.  For example:
         // Whether or not we are in strict parsing mode.  All that changes in strict parsing mode is
         // that some tokens that would be considered identifiers may be considered keywords.
@@ -701,7 +703,7 @@ namespace ts {
         // attached to the EOF token.
         let parseErrorBeforeNextFinishedNode = false;
 
-        export function parseSourceFile(fileName: string, sourceText: string, languageVersion: ScriptTarget, syntaxCursor: IncrementalParser.SyntaxCursor | undefined, setParentNodes = false, scriptKind?: ScriptKind): SourceFile {
+        export function parseSourceFile(fileName: string, sourceText: string, languageVersion: ScriptTarget, syntaxCursor: IncrementalParser.SyntaxCursor | undefined, setParentNodes = false, scriptKind?: ScriptKind, preprocessors?: Preprocessors): SourceFile {
             scriptKind = ensureScriptKind(fileName, scriptKind);
             if (scriptKind === ScriptKind.JSON) {
                 const result = parseJsonText(fileName, sourceText, languageVersion, syntaxCursor, setParentNodes);
@@ -715,9 +717,9 @@ namespace ts {
                 return result;
             }
 
-            initializeState(sourceText, languageVersion, syntaxCursor, scriptKind);
+            initializeState(sourceText, languageVersion, syntaxCursor, scriptKind, preprocessors);
 
-            const result = parseSourceFileWorker(fileName, languageVersion, setParentNodes, scriptKind);
+            const result = parseSourceFileWorker(fileName, languageVersion, setParentNodes, scriptKind, preprocessors);
 
             clearState();
 
@@ -802,7 +804,7 @@ namespace ts {
             return scriptKind === ScriptKind.TSX || scriptKind === ScriptKind.JSX || scriptKind === ScriptKind.JS || scriptKind === ScriptKind.JSON ? LanguageVariant.JSX : LanguageVariant.Standard;
         }
 
-        function initializeState(_sourceText: string, languageVersion: ScriptTarget, _syntaxCursor: IncrementalParser.SyntaxCursor | undefined, scriptKind: ScriptKind) {
+        function initializeState(_sourceText: string, languageVersion: ScriptTarget, _syntaxCursor: IncrementalParser.SyntaxCursor | undefined, scriptKind: ScriptKind, _preprocessors?: Preprocessors) {
             NodeConstructor = objectAllocator.getNodeConstructor();
             TokenConstructor = objectAllocator.getTokenConstructor();
             IdentifierConstructor = objectAllocator.getIdentifierConstructor();
@@ -838,6 +840,8 @@ namespace ts {
             scanner.setOnError(scanError);
             scanner.setScriptTarget(languageVersion);
             scanner.setLanguageVariant(getLanguageVariant(scriptKind));
+
+            preprocessors = _preprocessors;
         }
 
         function clearState() {
@@ -852,15 +856,16 @@ namespace ts {
             syntaxCursor = undefined;
             sourceText = undefined!;
             notParenthesizedArrow = undefined!;
+            preprocessors = undefined;
         }
 
-        function parseSourceFileWorker(fileName: string, languageVersion: ScriptTarget, setParentNodes: boolean, scriptKind: ScriptKind): SourceFile {
+        function parseSourceFileWorker(fileName: string, languageVersion: ScriptTarget, setParentNodes: boolean, scriptKind: ScriptKind, preprocessors?: Preprocessors): SourceFile {
             const isDeclarationFile = isDeclarationFileName(fileName);
             if (isDeclarationFile) {
                 contextFlags |= NodeFlags.Ambient;
             }
 
-            sourceFile = createSourceFile(fileName, languageVersion, scriptKind, isDeclarationFile);
+            sourceFile = createSourceFile(fileName, languageVersion, scriptKind, isDeclarationFile, preprocessors);
             sourceFile.flags = contextFlags;
 
             // Prime the scanner.
@@ -930,7 +935,7 @@ namespace ts {
             }
         }
 
-        function createSourceFile(fileName: string, languageVersion: ScriptTarget, scriptKind: ScriptKind, isDeclarationFile: boolean): SourceFile {
+        function createSourceFile(fileName: string, languageVersion: ScriptTarget, scriptKind: ScriptKind, isDeclarationFile: boolean, preprocessors?: Preprocessors): SourceFile {
             // code from createNode is inlined here so createNode won't have to deal with special case of creating source files
             // this is quite rare comparing to other nodes and createNode should be as fast as possible
             const sourceFile = <SourceFile>new SourceFileConstructor(SyntaxKind.SourceFile, /*pos*/ 0, /* end */ sourceText.length);
@@ -944,6 +949,7 @@ namespace ts {
             sourceFile.languageVariant = getLanguageVariant(scriptKind);
             sourceFile.isDeclarationFile = isDeclarationFile;
             sourceFile.scriptKind = scriptKind;
+            sourceFile.preprocessors = preprocessors;
 
             return sourceFile;
         }
@@ -1572,6 +1578,8 @@ namespace ts {
             }
 
             switch (parsingContext) {
+                case ParsingContext.PreprocessorStatementArguments:
+                    return isStartOfStatement();
                 case ParsingContext.SourceElements:
                 case ParsingContext.BlockStatements:
                 case ParsingContext.SwitchClauseStatements:
@@ -1722,6 +1730,8 @@ namespace ts {
             }
 
             switch (kind) {
+                case ParsingContext.PreprocessorStatementArguments:
+                    return token() === SyntaxKind.CloseBracketToken;
                 case ParsingContext.BlockStatements:
                 case ParsingContext.SwitchClauses:
                 case ParsingContext.TypeMembers:
@@ -1910,6 +1920,7 @@ namespace ts {
                 case ParsingContext.VariableDeclarations:
                 case ParsingContext.JSDocParameters:
                 case ParsingContext.Parameters:
+                case ParsingContext.PreprocessorStatementArguments:
                     return true;
             }
             return false;
@@ -1923,6 +1934,7 @@ namespace ts {
                 case ParsingContext.SwitchClauses:
                     return isReusableSwitchClause(node);
 
+                case ParsingContext.PreprocessorStatementArguments:
                 case ParsingContext.SourceElements:
                 case ParsingContext.BlockStatements:
                 case ParsingContext.SwitchClauseStatements:
@@ -4911,7 +4923,7 @@ namespace ts {
                 case SyntaxKind.OpenParenToken:
                     return parseParenthesizedExpression();
                 case SyntaxKind.OpenBracketToken:
-                    return parseArrayLiteralExpression();
+                    return parseArrayLiteralOrPreprocessorExpression();
                 case SyntaxKind.OpenBraceToken:
                     return parseObjectLiteralExpression();
                 case SyntaxKind.AsyncKeyword:
@@ -4965,6 +4977,92 @@ namespace ts {
 
         function parseArgumentExpression(): Expression {
             return doOutsideOfContext(disallowInAndDecoratorContext, parseArgumentOrArrayLiteralElement);
+        }
+
+        function parseArrayLiteralOrPreprocessorExpression(): PrimaryExpression {
+            // We have to lookahead past the open bracket to see if it's a preprocessor expression or not.
+            if (isStartOfPreprocessorExpression()) {
+                return parsePreprocessorExpression();
+            } else {
+                return parseArrayLiteralExpression();
+            }
+        }
+
+        function isStartOfPreprocessorExpression(): boolean {
+            return lookAhead(() => {
+                parseExpected(SyntaxKind.OpenBracketToken);
+                return token() === SyntaxKind.HashToken;
+            })
+        }
+
+        function isPreprocessorStatementDeclaration() {
+            return lookAhead(() => {
+                nextToken();
+                return token() === SyntaxKind.HashHashToken;
+            });
+        }
+
+        function parsePreprocessorExpression(): PrimaryExpression {
+            let startPos = scanner.getTextPos();
+            parseExpected(SyntaxKind.OpenBracketToken);
+            parseExpected(SyntaxKind.HashToken);
+            let tag = scanner.getTokenValue();
+            nextTokenWithoutCheck();
+            let args = parseDelimitedList(ParsingContext.ArrayLiteralMembers, parseArgumentOrArrayLiteralElement);
+            parseExpected(SyntaxKind.CloseBracketToken);
+            let endPos = scanner.getTextPos();
+
+            if (preprocessors && preprocessors.expressions.has(tag)) {
+                return createParen(preprocessors.expressions.get(tag)!(args, { pos: startPos, end: endPos }, getPreprocessorContext()));
+            } else {
+                parseErrorAt(
+                    startPos,
+                    endPos,
+                    Diagnostics.Preprocessor_expression_with_tag_0_must_be_replaced_by_a_preprocessor_before_typechecking,
+                    tag
+                );
+                // FIXME: what can we even do here?
+                return createParen(args[0]);
+            }
+        }
+
+        function parsePreprocessorStatement(): Statement {
+            let startPos = scanner.getTextPos();
+            parseExpected(SyntaxKind.OpenBracketToken);
+            parseExpected(SyntaxKind.HashHashToken);
+            let tag = scanner.getTokenValue();
+            nextTokenWithoutCheck();
+            let args = parseDelimitedList(ParsingContext.PreprocessorStatementArguments, parseStatement);
+            parseExpected(SyntaxKind.CloseBracketToken);
+            let endPos = scanner.getTextPos();
+
+            if (preprocessors && preprocessors.statements.has(tag)) {
+                return preprocessors.statements.get(tag)!(args, { pos: startPos, end: endPos }, getPreprocessorContext());
+            } else {
+                parseErrorAt(
+                    startPos,
+                    endPos,
+                    Diagnostics.Preprocessor_statement_with_tag_0_must_be_replaced_by_a_preprocessor_before_typechecking,
+                    tag
+                );
+                // FIXME: what can we even do here?
+                return createEmptyStatement();
+            }
+        }
+
+        function getPreprocessorContext(): PreprocessorContext {
+            return {
+                emitDiagnostic: (diag) => {
+                    let diagnosticForEmit = {
+                        ...diag,
+                        file: sourceFile,
+                        relatedInformation:
+                            diag.relatedInformation === undefined ? undefined :
+                            diag.relatedInformation.map((info) => info.start !== undefined ? { ...info, file: sourceFile } : info)
+                    };
+                    parseDiagnostics.push(diagnosticForEmit);
+                }
+            }
         }
 
         function parseArrayLiteralExpression(): ArrayLiteralExpression {
@@ -5586,6 +5684,11 @@ namespace ts {
             switch (token()) {
                 case SyntaxKind.SemicolonToken:
                     return parseEmptyStatement();
+                case SyntaxKind.OpenBracketToken:
+                    if (isPreprocessorStatementDeclaration()) {
+                        return parsePreprocessorStatement();
+                    }
+                    break;
                 case SyntaxKind.OpenBraceToken:
                     return parseBlock(/*ignoreMissingOpenBrace*/ false);
                 case SyntaxKind.VarKeyword:
@@ -6656,6 +6759,7 @@ namespace ts {
             TupleElementTypes,         // Element types in tuple element type list
             HeritageClauses,           // Heritage clauses for a class or interface declaration.
             ImportOrExportSpecifiers,  // Named import clause's import specifier list
+            PreprocessorStatementArguments, // Arguments to a preprocessor statement
             Count                      // Number of parsing contexts
         }
 
@@ -7605,7 +7709,7 @@ namespace ts {
                 return sourceFile;
             }
 
-            if (sourceFile.statements.length === 0) {
+            if (sourceFile.statements.length === 0 || 1 === 1) { // FIXME: figure out how to do incremental parsing with preprocessors
                 // If we don't have any statements in the current source file, then there's no real
                 // way to incrementally parse.  So just do a full parse instead.
                 return Parser.parseSourceFile(sourceFile.fileName, newText, sourceFile.languageVersion, /*syntaxCursor*/ undefined, /*setParentNodes*/ true, sourceFile.scriptKind);

@@ -895,13 +895,30 @@ namespace ts {
     }
 
     export function createDiagnosticForNodeInSourceFile(sourceFile: SourceFile, node: Node, message: DiagnosticMessage, arg0?: string | number, arg1?: string | number, arg2?: string | number, arg3?: string | number): DiagnosticWithLocation {
+        if (node.flags & NodeFlags.CreatedInPreprocessor) {
+            // If the node came from a preprocessor, we should use the preprocessor's text range
+            let preprocessedNode = node as PreprocessedNode;
+            return createFileDiagnostic(
+                sourceFile,
+                preprocessedNode.preprocessor.tag.pos,
+                preprocessedNode.preprocessor.tag.end - preprocessedNode.preprocessor.tag.pos,
+                message,
+                arg0,
+                arg1,
+                arg2,
+                arg3
+            );
+        }
+
         const span = getErrorSpanForNode(sourceFile, node);
         return createFileDiagnostic(sourceFile, span.start, span.length, message, arg0, arg1, arg2, arg3);
     }
 
     export function createDiagnosticForNodeFromMessageChain(node: Node, messageChain: DiagnosticMessageChain, relatedInformation?: DiagnosticRelatedInformation[]): DiagnosticWithLocation {
         const sourceFile = getSourceFileOfNode(node);
-        const span = getErrorSpanForNode(sourceFile, node);
+        const span = (node.flags & NodeFlags.CreatedInPreprocessor)
+            ? createTextSpanFromBounds((<PreprocessedNode>node).preprocessor.tag.pos, (<PreprocessedNode>node).preprocessor.tag.end)
+            : getErrorSpanForNode(sourceFile, node);
         return {
             file: sourceFile,
             start: span.start,

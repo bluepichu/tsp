@@ -742,14 +742,28 @@ namespace ts {
         let current: Node = sourceFile;
         outer: while (true) {
             // find the child that contains 'position'
-            for (const child of current.getChildren(sourceFile)) {
-                const start = allowPositionInLeadingTrivia ? child.getFullStart() : child.getStart(sourceFile, /*includeJsDoc*/ true);
+            let children: Node[];
+            if (current.flags & NodeFlags.CreatedInPreprocessor) {
+                // We can't rescan preprocessed nodes, so we just take all of the child nodes in the AST.
+                children = [];
+                current.forEachChild((child) => children.push(child));
+            } else {
+                children = current.getChildren(sourceFile);
+            }
+            for (const child of children) {
+                const start =
+                    (child.flags & NodeFlags.CreatedInPreprocessor) ? (<PreprocessedNode>child).preprocessor.self.pos :
+                    allowPositionInLeadingTrivia ? child.getFullStart() :
+                    child.getStart(sourceFile, /*includeJsDoc*/ true);
                 if (start > position) {
                     // If this child begins after position, then all subsequent children will as well.
                     break;
                 }
 
-                const end = child.getEnd();
+                const end =
+                    (child.flags & NodeFlags.CreatedInPreprocessor) ? (<PreprocessedNode>child).preprocessor.self.end :
+                    child.getEnd();
+
                 if (position < end || (position === end && (child.kind === SyntaxKind.EndOfFileToken || includeEndPosition))) {
                     current = child;
                     continue outer;

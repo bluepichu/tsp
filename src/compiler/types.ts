@@ -148,6 +148,8 @@ namespace ts {
         CloseParenToken,
         OpenBracketToken,
         CloseBracketToken,
+        HashToken,
+        HashHashToken,
         DotToken,
         DotDotDotToken,
         SemicolonToken,
@@ -574,6 +576,7 @@ namespace ts {
         /* @internal */ InWithStatement               = 1 << 24, // If any ancestor of node was the `statement` of a WithStatement (not the `expression`)
         JsonFile                                      = 1 << 25, // If node was parsed in a Json
         /* @internal */ TypeCached                    = 1 << 26, // If a type was cached for node at any point
+        CreatedInPreprocessor                         = 1 << 27, // If node was touched by a preprocessor
 
         BlockScoped = Let | Const,
 
@@ -656,6 +659,13 @@ namespace ts {
         /* @internal */ emitNode?: EmitNode;                  // Associated EmitNode (initialized by transforms)
         /* @internal */ contextualType?: Type;                // Used to temporarily assign a contextual type during overload resolution
         /* @internal */ inferenceContext?: InferenceContext;  // Inference context for contextual type
+    }
+
+    export interface PreprocessedNode extends Node {
+        preprocessor: {
+            tag: TextRange;
+            self: TextRange;
+        };
     }
 
     export interface JSDocContainer {
@@ -2982,6 +2992,7 @@ namespace ts {
         /* @internal */ localJsxFactory?: EntityName;
 
         /*@internal*/ exportedModulesFromDeclarationEmit?: ExportedModulesFromDeclarationEmit;
+        /*@internal*/ preprocessors?: Preprocessors;
     }
 
     /*@internal*/
@@ -4943,13 +4954,17 @@ namespace ts {
     export interface DiagnosticRelatedInformation {
         category: DiagnosticCategory;
         code: number;
-        file: SourceFile | undefined;
-        start: number | undefined;
-        length: number | undefined;
+        file?: SourceFile;
+        start?: number;
+        length?: number;
         messageText: string | DiagnosticMessageChain;
     }
     export interface DiagnosticWithLocation extends Diagnostic {
         file: SourceFile;
+        start: number;
+        length: number;
+    }
+    export interface DiagnosticWithLocationFromPreprocessor extends Diagnostic {
         start: number;
         length: number;
     }
@@ -4973,6 +4988,32 @@ namespace ts {
 
     export interface PluginImport {
         name: string;
+    }
+
+    export interface PreprocessorImport {
+        name: string;
+        options?: any;
+    }
+
+    export interface PreprocessorContext {
+        emitDiagnostic: (diagnostic: DiagnosticWithLocationFromPreprocessor) => void;
+    }
+
+    export type PreprocessorExpressionFunction = (args: NodeArray<Expression>, textRange: TextRange, context: PreprocessorContext) => Expression;
+    export type PreprocessorStatementFunction  = (args: NodeArray<Statement>,  textRange: TextRange, context: PreprocessorContext) => Statement;
+
+    export interface PreprocessorRegistrationContext {
+        registerPreprocessorExpression: (tag: string, fn: PreprocessorExpressionFunction) => void;
+        registerPreprocessorStatement: (tag: string, fn: PreprocessorStatementFunction) => void;
+    }
+
+    export interface PreprocessorModule {
+        default: (context: PreprocessorRegistrationContext) => void;
+    }
+
+    export interface Preprocessors {
+        expressions: Map<PreprocessorExpressionFunction>;
+        statements: Map<PreprocessorStatementFunction>;
     }
 
     export interface ProjectReference {
@@ -5081,6 +5122,7 @@ namespace ts {
         outFile?: string;
         paths?: MapLike<string[]>;
         /*@internal*/ plugins?: PluginImport[];
+        preprocessors?: PreprocessorImport[];
         preserveConstEnums?: boolean;
         preserveSymlinks?: boolean;
         /* @internal */ preserveWatchOutput?: boolean;

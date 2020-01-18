@@ -248,7 +248,7 @@ namespace ts.projectSystem {
             this.events.forEach(event => assert.notEqual(event.eventName, eventName));
         }
 
-        checkSingleConfigFileDiagEvent(configFileName: string, triggerFile: string, errors: readonly ConfigFileDiagnostic[]) {
+        checkSingleConfigFileDiagEvent(configFileName: string, triggerFile: string, errors: ConfigFileDiagnostic[]) {
             const eventData = this.getEvent<server.ConfigFileDiagEvent>(server.ConfigFileDiagEvent);
             assert.equal(eventData.configFileName, configFileName);
             assert.equal(eventData.triggerFile, triggerFile);
