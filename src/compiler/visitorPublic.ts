@@ -1,6 +1,8 @@
 namespace ts {
     const isTypeNodeOrTypeParameterDeclaration = or(isTypeNode, isTypeParameterDeclaration);
 
+    export const getNullTransformationContext = () => nullTransformationContext;
+
     /**
      * Visits a Node using the supplied visitor, possibly returning a new Node in its place.
      *

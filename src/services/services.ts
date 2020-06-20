@@ -169,14 +169,17 @@ namespace ts {
 
     function addSyntheticNodes(nodes: Push<Node>, pos: number, end: number, parent: Node): void {
         scanner.setTextPos(pos);
+        let prevToken: SyntaxKind | undefined;
         while (pos < end) {
             const token = scanner.scan();
             const textPos = scanner.getTextPos();
             if (textPos <= end) {
-                if (token === SyntaxKind.Identifier) {
+                // TODO: is this the right fix?
+                if (token === SyntaxKind.Identifier && prevToken !== SyntaxKind.HashHashToken) {
                     Debug.fail(`Did not expect ${Debug.formatSyntaxKind(parent.kind)} to have an Identifier in its trivia`);
                 }
                 nodes.push(createNode(token, pos, textPos, parent));
+                prevToken = token;
             }
             pos = textPos;
             if (token === SyntaxKind.EndOfFileToken) {
@@ -1011,12 +1014,12 @@ namespace ts {
 
             if (this.currentFileName !== fileName) {
                 // This is a new file, just parse it
-                sourceFile = createLanguageServiceSourceFile(fileName, scriptSnapshot, ScriptTarget.Latest, version, /*setNodeParents*/ true, scriptKind);
+                sourceFile = createLanguageServiceSourceFile(fileName, scriptSnapshot, ScriptTarget.Latest, version, /*setNodeParents*/ true, this.host.getCompilationSettings(), scriptKind);
             }
             else if (this.currentFileVersion !== version) {
                 // This is the same file, just a newer version. Incrementally parse the file.
                 const editRange = scriptSnapshot.getChangeRange(this.currentFileScriptSnapshot!);
-                sourceFile = updateLanguageServiceSourceFile(this.currentSourceFile!, scriptSnapshot, version, editRange);
+                sourceFile = updateLanguageServiceSourceFile(this.currentSourceFile!, scriptSnapshot, version, editRange, this.host.getCompilationSettings());
             }
 
             if (sourceFile) {
@@ -1036,16 +1039,16 @@ namespace ts {
         sourceFile.scriptSnapshot = scriptSnapshot;
     }
 
-    export function createLanguageServiceSourceFile(fileName: string, scriptSnapshot: IScriptSnapshot, scriptTarget: ScriptTarget, version: string, setNodeParents: boolean, scriptKind?: ScriptKind): SourceFile {
-        const sourceFile = createSourceFile(fileName, getSnapshotText(scriptSnapshot), scriptTarget, setNodeParents, scriptKind);
+    export function createLanguageServiceSourceFile(fileName: string, scriptSnapshot: IScriptSnapshot, scriptTarget: ScriptTarget, version: string, setNodeParents: boolean, options: CompilerOptions, scriptKind?: ScriptKind): SourceFile {
+        const sourceFile = createSourceFile(fileName, getSnapshotText(scriptSnapshot), scriptTarget, setNodeParents, scriptKind, getPreprocessors(options));
         setSourceFileFields(sourceFile, scriptSnapshot, version);
         return sourceFile;
     }
 
-    export function updateLanguageServiceSourceFile(sourceFile: SourceFile, scriptSnapshot: IScriptSnapshot, version: string, textChangeRange: TextChangeRange | undefined, aggressiveChecks?: boolean): SourceFile {
+    export function updateLanguageServiceSourceFile(sourceFile: SourceFile, scriptSnapshot: IScriptSnapshot, version: string, textChangeRange: TextChangeRange | undefined, options: CompilerOptions, aggressiveChecks?: boolean): SourceFile {
         // If we were given a text change range, and our version or open-ness changed, then
         // incrementally parse this file.
-        if (textChangeRange) {
+        if (textChangeRange && 1 === 0 + 0) { // FIXME: need to figure out how to make this work with preprocessors
             if (version !== sourceFile.version) {
                 let newText: string;
 
@@ -1094,7 +1097,7 @@ namespace ts {
         }
 
         // Otherwise, just create a new source file.
-        return createLanguageServiceSourceFile(sourceFile.fileName, scriptSnapshot, sourceFile.languageVersion, version, /*setNodeParents*/ true, sourceFile.scriptKind);
+        return createLanguageServiceSourceFile(sourceFile.fileName, scriptSnapshot, sourceFile.languageVersion, version, /*setNodeParents*/ true, options, sourceFile.scriptKind);
     }
 
     class CancellationTokenObject implements CancellationToken {

@@ -68,11 +68,36 @@ namespace ts {
         return createCompilerHostWorker(options, setParentNodes);
     }
 
+    export function getPreprocessors(options: CompilerOptions): Preprocessors {
+        let preprocessors: Preprocessors = {
+            expressions: createMap(),
+            statements: createMap()
+        };
+
+        if (options.preprocessors) {
+            options.preprocessors.forEach((preprocessorImport) => {
+                let path = require.resolve(preprocessorImport.name, { paths: [ options.configFilePath! ] });
+                let preprocessor: PreprocessorModule = require(path);
+                preprocessor.default({
+                    registerPreprocessorExpression(tag, fn) {
+                        preprocessors.expressions.set(tag, fn);
+                    },
+                    registerPreprocessorStatement(tag, fn) {
+                        preprocessors.statements.set(tag, fn);
+                    }
+                })
+            });
+        }
+
+        return preprocessors;
+    }
+
     /*@internal*/
     // TODO(shkamat): update this after reworking ts build API
     export function createCompilerHostWorker(options: CompilerOptions, setParentNodes?: boolean, system = sys): CompilerHost {
         const existingDirectories = createMap<boolean>();
         const getCanonicalFileName = createGetCanonicalFileName(system.useCaseSensitiveFileNames);
+        const preprocessors = getPreprocessors(options);
         function getSourceFile(fileName: string, languageVersion: ScriptTarget, onError?: (message: string) => void): SourceFile | undefined {
             let text: string | undefined;
             try {
@@ -87,7 +112,7 @@ namespace ts {
                 }
                 text = "";
             }
-            return text !== undefined ? createSourceFile(fileName, text, languageVersion, setParentNodes) : undefined;
+            return text !== undefined ? createSourceFile(fileName, text, languageVersion, setParentNodes, undefined /* scriptKind */, preprocessors) : undefined;
         }
 
         function directoryExists(directoryPath: string): boolean {
@@ -1226,6 +1251,10 @@ namespace ts {
 
         function tryReuseStructureFromOldProgram(): StructureIsReused {
             if (!oldProgram) {
+                return StructureIsReused.Not;
+            }
+
+            if (1 === 1) { // FIXME: need to work out how to do this with preprocessors
                 return StructureIsReused.Not;
             }
 

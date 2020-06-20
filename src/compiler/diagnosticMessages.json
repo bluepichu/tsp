@@ -5649,7 +5649,7 @@
         "category": "Message",
         "code": 95116
     },
-    
+
     "No value exists in scope for the shorthand property '{0}'. Either declare one or provide an initializer.": {
         "category": "Error",
         "code": 18004
@@ -5749,5 +5749,23 @@
     "Only numeric enums can have computed members, but this expression has type '{0}'. If you do not need exhaustiveness checks, consider using an object literal instead.": {
         "category": "Error",
         "code": 18033
+    },
+
+
+    "List of preprocessors.": {
+        "category": "Message",
+        "code": 99800
+    },
+    "Preprocessor expression with tag '{0}' must be replaced by a preprocessor before typechecking.": {
+        "category": "Error",
+        "code": 99801
+    },
+    "Preprocessor statement with tag '{0}' must be replaced by a preprocessor before typechecking.": {
+        "category": "Error",
+        "code": 99802
+    },
+    "Generic preprocessor error.  (This preprocessor neglected to emit its own error message.)": {
+        "category": "Error",
+        "code": 99900
     }
 }
