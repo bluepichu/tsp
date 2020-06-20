@@ -392,7 +392,7 @@ namespace ts {
             return true;
         }
 
-        return node.pos === node.end && node.pos >= 0 && node.kind !== SyntaxKind.EndOfFileToken;
+        return node.pos === node.end && node.pos >= 0 && node.kind !== SyntaxKind.EndOfFileToken && !(node.flags & NodeFlags.CreatedInPreprocessor);
     }
 
     export function nodeIsPresent(node: Node | undefined): boolean {
@@ -842,7 +842,11 @@ namespace ts {
     // Computed property names will just be emitted as "[<expr>]", where <expr> is the source
     // text of the expression in the computed property.
     export function declarationNameToString(name: DeclarationName | QualifiedName | undefined) {
-        return !name || getFullWidth(name) === 0 ? "(Missing)" : getTextOfNode(name);
+        return (
+            name && name.kind === ts.SyntaxKind.Identifier && name.autoGenerateFlags === GeneratedIdentifierFlags.Auto ? name.escapedText as string :
+            !name || getFullWidth(name) === 0 ? "(Missing)" :
+            getTextOfNode(name)
+        );
     }
 
     export function getNameFromIndexInfo(info: IndexInfo): string | undefined {

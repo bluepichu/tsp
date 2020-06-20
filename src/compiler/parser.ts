@@ -1579,7 +1579,6 @@ namespace ts {
 
             switch (parsingContext) {
                 case ParsingContext.PreprocessorStatementArguments:
-                    return isStartOfStatement();
                 case ParsingContext.SourceElements:
                 case ParsingContext.BlockStatements:
                 case ParsingContext.SwitchClauseStatements:
@@ -1731,7 +1730,6 @@ namespace ts {
 
             switch (kind) {
                 case ParsingContext.PreprocessorStatementArguments:
-                    return token() === SyntaxKind.CloseBracketToken;
                 case ParsingContext.BlockStatements:
                 case ParsingContext.SwitchClauses:
                 case ParsingContext.TypeMembers:
@@ -4921,9 +4919,12 @@ namespace ts {
                 case SyntaxKind.FalseKeyword:
                     return parseTokenNode<PrimaryExpression>();
                 case SyntaxKind.OpenParenToken:
+                    if (isPreprocessorExpressionDeclaration()) {
+                        return parsePreprocessorExpression();
+                    }
                     return parseParenthesizedExpression();
                 case SyntaxKind.OpenBracketToken:
-                    return parseArrayLiteralOrPreprocessorExpression();
+                    return parseArrayLiteralExpression();
                 case SyntaxKind.OpenBraceToken:
                     return parseObjectLiteralExpression();
                 case SyntaxKind.AsyncKeyword:
@@ -4979,20 +4980,11 @@ namespace ts {
             return doOutsideOfContext(disallowInAndDecoratorContext, parseArgumentOrArrayLiteralElement);
         }
 
-        function parseArrayLiteralOrPreprocessorExpression(): PrimaryExpression {
-            // We have to lookahead past the open bracket to see if it's a preprocessor expression or not.
-            if (isStartOfPreprocessorExpression()) {
-                return parsePreprocessorExpression();
-            } else {
-                return parseArrayLiteralExpression();
-            }
-        }
-
-        function isStartOfPreprocessorExpression(): boolean {
+        function isPreprocessorExpressionDeclaration() {
             return lookAhead(() => {
-                parseExpected(SyntaxKind.OpenBracketToken);
+                nextToken();
                 return token() === SyntaxKind.HashToken;
-            })
+            });
         }
 
         function isPreprocessorStatementDeclaration() {
@@ -5004,12 +4996,12 @@ namespace ts {
 
         function parsePreprocessorExpression(): PrimaryExpression {
             let startPos = scanner.getTextPos();
-            parseExpected(SyntaxKind.OpenBracketToken);
+            parseExpected(SyntaxKind.OpenParenToken);
             parseExpected(SyntaxKind.HashToken);
             let tag = scanner.getTokenValue();
             nextTokenWithoutCheck();
-            let args = parseDelimitedList(ParsingContext.ArrayLiteralMembers, parseArgumentOrArrayLiteralElement);
-            parseExpected(SyntaxKind.CloseBracketToken);
+            let args = parseDelimitedList(ParsingContext.ArgumentExpressions, parseArgumentOrArrayLiteralElement);
+            parseExpected(SyntaxKind.CloseParenToken);
             let endPos = scanner.getTextPos();
 
             if (preprocessors && preprocessors.expressions.has(tag)) {
@@ -5028,17 +5020,20 @@ namespace ts {
 
         function parsePreprocessorStatement(): Statement {
             let startPos = scanner.getTextPos();
-            parseExpected(SyntaxKind.OpenBracketToken);
+            parseExpected(SyntaxKind.OpenBraceToken);
             parseExpected(SyntaxKind.HashHashToken);
             let tag = scanner.getTokenValue();
             nextTokenWithoutCheck();
-            let args = parseDelimitedList(ParsingContext.PreprocessorStatementArguments, parseStatement);
-            parseExpected(SyntaxKind.CloseBracketToken);
+            let args = parseList(ParsingContext.PreprocessorStatementArguments, parseStatement);
+            parseExpected(SyntaxKind.CloseBraceToken);
             let endPos = scanner.getTextPos();
 
             if (preprocessors && preprocessors.statements.has(tag)) {
                 return preprocessors.statements.get(tag)!(args, { pos: startPos, end: endPos }, getPreprocessorContext());
             } else {
+                if (!preprocessors) {
+                    throw new Error("nope");
+                }
                 parseErrorAt(
                     startPos,
                     endPos,
@@ -5061,6 +5056,10 @@ namespace ts {
                             diag.relatedInformation.map((info) => info.start !== undefined ? { ...info, file: sourceFile } : info)
                     };
                     parseDiagnostics.push(diagnosticForEmit);
+                },
+                createTemp: () => {
+                    // FIXME: revisit this for correctness
+                    return createTempVariable((ident) => internIdentifier(ident.escapedText as string));
                 }
             }
         }
@@ -5684,12 +5683,10 @@ namespace ts {
             switch (token()) {
                 case SyntaxKind.SemicolonToken:
                     return parseEmptyStatement();
-                case SyntaxKind.OpenBracketToken:
+                case SyntaxKind.OpenBraceToken:
                     if (isPreprocessorStatementDeclaration()) {
                         return parsePreprocessorStatement();
                     }
-                    break;
-                case SyntaxKind.OpenBraceToken:
                     return parseBlock(/*ignoreMissingOpenBrace*/ false);
                 case SyntaxKind.VarKeyword:
                     return parseVariableStatement(<VariableStatement>createNodeWithJSDoc(SyntaxKind.VariableDeclaration));

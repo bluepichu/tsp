@@ -4997,6 +4997,7 @@ namespace ts {
 
     export interface PreprocessorContext {
         emitDiagnostic: (diagnostic: DiagnosticWithLocationFromPreprocessor) => void;
+        createTemp: () => ts.Identifier;
     }
 
     export type PreprocessorExpressionFunction = (args: NodeArray<Expression>, textRange: TextRange, context: PreprocessorContext) => Expression;

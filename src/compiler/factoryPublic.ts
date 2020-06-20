@@ -155,7 +155,7 @@ namespace ts {
     export function createTempVariable(recordTempVariable: ((node: Identifier) => void) | undefined): Identifier;
     /* @internal */ export function createTempVariable(recordTempVariable: ((node: Identifier) => void) | undefined, reservedInNestedScopes: boolean): GeneratedIdentifier;
     export function createTempVariable(recordTempVariable: ((node: Identifier) => void) | undefined, reservedInNestedScopes?: boolean): GeneratedIdentifier {
-        const name = createIdentifier("") as GeneratedIdentifier;
+        const name = createIdentifier("_" + nextAutoGenerateId) as GeneratedIdentifier;
         name.autoGenerateFlags = GeneratedIdentifierFlags.Auto;
         name.autoGenerateId = nextAutoGenerateId;
         nextAutoGenerateId++;

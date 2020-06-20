@@ -1052,7 +1052,7 @@ namespace ts {
     export function updateLanguageServiceSourceFile(sourceFile: SourceFile, scriptSnapshot: IScriptSnapshot, version: string, textChangeRange: TextChangeRange | undefined, options: CompilerOptions, aggressiveChecks?: boolean): SourceFile {
         // If we were given a text change range, and our version or open-ness changed, then
         // incrementally parse this file.
-        if (textChangeRange) {
+        if (textChangeRange && 1 === 0 + 0) { // FIXME: need to figure out how to make this work with preprocessors
             if (version !== sourceFile.version) {
                 let newText: string;
 

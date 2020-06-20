@@ -4406,6 +4406,7 @@ declare namespace ts {
     function setOriginalNode<T extends Node>(node: T, original: Node | undefined): T;
 }
 declare namespace ts {
+    const getNullTransformationContext: () => TransformationContext;
     /**
      * Visits a Node using the supplied visitor, possibly returning a new Node in its place.
      *
